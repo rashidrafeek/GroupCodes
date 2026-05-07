@@ -1,20 +1,16 @@
-import guesthost.lattice as lat                                        
-import ase.io                                                          
-                                                                       
-# Load system
-sys = ase.io.read('structure.xyz')                                     
-                                                                       
+import guesthost.lattice as lat
+
 # Create lattice                                                       
 lattice = lat.HPLattice(motifs, cell, nx, ny, nz)                      
-                                                                       
+
+ind = (0, 0, 0)
+
 # Compute local cell parameters                                        
-pb_axis = (pb_orig_ind, [pb_ax1, pb_ax2, pb_ax3])                      
-params = lattice.ucell_localcellparameters(sys, pb_axis)               
+params = lattice.ucell_localcellparameters(ind)               
                                                                        
 # Compute MA orientation                                               
-c_ind, n_ind = 0, 4  # Example indices                                 
-theta, phi = lattice.ucell_theta_phi(sys, c_ind, n_ind, pb_axis, dir=0)
+theta, phi = lattice.ucell_theta_phi(ind, dir=0)
                                                                        
 # Compute order parameters                                             
-eta_lat = lattice.ucell_η_lat(sys, pb_axis, br_axis, dir_coup=0)       
-eta_ma = lattice.ucell_η_MA(sys, c_ind, n_ind, pb_axis, dir=0)         
+eta_lat = lattice.ucell_η_lat(ind, dir_coup=0)       
+eta_ma = lattice.ucell_η_MA(ind, dir=0)         

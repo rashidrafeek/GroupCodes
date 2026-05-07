@@ -1,12 +1,12 @@
 import numpy as np
 import unittest
+from pathlib import Path
 import guesthost as gh
-import ase.io
 
 class TestUnitcellFunctions(unittest.TestCase):
     def setUp(self):
         # Load the test structure, following test_lattice_orientations.py pattern
-        self.mpb_sys_ini_path = "structures/mpb_trajectory.xyz"
+        self.mpb_sys_ini_path = Path(__file__).parent / "structures" / "mpb_trajectory.xyz"
         self.trj = gh.Trajectory(self.mpb_sys_ini_path, order=True)
         self.n = 4  # Number of unitcells in each direction
         self.all_inds = [320, 384, 385, 386, 256, 387, 388, 389, 0, 64, 65, 66]
@@ -25,12 +25,11 @@ class TestUnitcellFunctions(unittest.TestCase):
         # Get the first system and lattice for testing
         self.sys = self.trj.atoms_list[0]
         self.lattice = lattices[0]
+        self.ind = (0, 0, 0)
 
     def test_ucell_localcellvecs(self):
         """Test local cell vectors computation"""
-        # Mock pb_axis: Pb at 8, I at 9,10,11
-        pb_axis = (8, [9, 10, 11])
-        vecs = self.lattice.ucell_localcellvecs(self.sys, pb_axis)
+        vecs = self.lattice.ucell_localcellvecs(self.ind)
         self.assertEqual(len(vecs), 3)
         for v in vecs:
             self.assertEqual(len(v), 3)
@@ -38,8 +37,7 @@ class TestUnitcellFunctions(unittest.TestCase):
 
     def test_ucell_localcellparameters(self):
         """Test local cell parameters computation"""
-        pb_axis = (8, [9, 10, 11])
-        params = self.lattice.ucell_localcellparameters(self.sys, pb_axis)
+        params = self.lattice.ucell_localcellparameters(self.ind)
         required_keys = ['a', 'b', 'c', 'α', 'β', 'γ', 'vol']
         for key in required_keys:
             self.assertIn(key, params)
@@ -47,9 +45,7 @@ class TestUnitcellFunctions(unittest.TestCase):
 
     def test_ucell_theta_phi(self):
         """Test theta phi computation"""
-        c_ind, n_ind = 0, 4  # C and N indices
-        pb_axis = (8, [9, 10, 11])
-        theta, phi = self.lattice.ucell_theta_phi(self.sys, c_ind, n_ind, pb_axis, 0)
+        theta, phi = self.lattice.ucell_theta_phi(self.ind, 0)
         self.assertTrue(np.isfinite(theta))
         self.assertTrue(np.isfinite(phi))
         self.assertGreaterEqual(theta, 0)
@@ -57,19 +53,14 @@ class TestUnitcellFunctions(unittest.TestCase):
 
     def test_ucell_η_MA(self):
         """Test MA order parameter computation"""
-        c_ind, n_ind = 0, 4
-        pb_axis = (8, [9, 10, 11])
-        eta = self.lattice.ucell_η_MA(self.sys, c_ind, n_ind, pb_axis, 0)
+        eta = self.lattice.ucell_η_MA(self.ind, 0)
         self.assertEqual(len(eta), 2)
         self.assertTrue(np.all(np.isfinite(eta)))
 
-    def test_compute_for_all_with_sys(self):
+    def test_compute_for_all(self):
         """Test computing unitcell functions for all frames using LatticeTrajectory"""
         # Compute theta phi for all frames
-        results = self.lattraj.compute_for_all_with_sys(
-            self.trj.atoms_list,
-            lambda lat, sys: lat.ucell_theta_phi(sys, 0, 4, (8, [9, 10, 11]), 0)
-        )
+        results = self.lattraj.compute_for_all(lambda lat: lat.ucell_theta_phi(self.ind, 0))
         self.assertEqual(len(results), self.trj.nt)
         for res in results:
             theta, phi = res
@@ -77,6 +68,13 @@ class TestUnitcellFunctions(unittest.TestCase):
             self.assertTrue(np.isfinite(phi))
             self.assertGreaterEqual(theta, 0)
             self.assertLessEqual(theta, 180)
+
+    def test_all_ucell_theta_phi(self):
+        theta, phi = self.lattice.all_ucell_theta_phi(dir=0)
+        self.assertEqual(theta.shape, (self.n, self.n, self.n))
+        self.assertEqual(phi.shape, (self.n, self.n, self.n))
+        self.assertTrue(np.all(np.isfinite(theta)))
+        self.assertTrue(np.all(np.isfinite(phi)))
 
     def test_U_r_and_ucell_ω(self):
         """Test rotation matrix and ω computation"""

@@ -13,6 +13,16 @@ class Motif:
         self.fragments = frg_list
         self.nfrg = len(frg_list)
 
+    @property
+    def ma(self):
+        """Methylammonium fragment for hybrid perovskite motifs."""
+        return self.fragments[0]
+
+    @property
+    def host(self):
+        """Host fragment for hybrid perovskite motifs."""
+        return self.fragments[1]
+
 class Lattice:
     """Class representing a lattice composed of several motifs with its associated cell"""
 
@@ -45,8 +55,7 @@ class HPLattice(Lattice):
         super().__init__(motif_list, cell, nx, ny, nz)
 
     def ma_torsion(self, ind, frg_ref, htyp="N", atan=False):
-        ix, iy, iz = ind
-        frg = self.motif_grid[ix, iy, iz].fragments[0]
+        frg = self.get_motif(ind).ma
         if htyp == "N":
             v1 = frg_ref.HN
         elif htyp == "C":
@@ -62,7 +71,7 @@ class HPLattice(Lattice):
     def all_ma_torsions(self, lattice_ref, htyp="N", atan=False):
         torsions = np.zeros((self.nx, self.ny, self.nz))
         for ix, iy, iz in np.ndindex(self.nx, self.ny, self.nz):
-            frg_ref = lattice_ref.motif_grid[ix,iy,iz].fragments[0]
+            frg_ref = lattice_ref.get_motif((ix, iy, iz)).ma
             torsion = self.ma_torsion((ix, iy, iz), frg_ref, htyp=htyp, atan=atan)
 
             torsions[ix,iy,iz] = torsion
@@ -70,8 +79,7 @@ class HPLattice(Lattice):
         return torsions
 
     def ma_torsion_removetilts(self, ind, frg_ref, htyp="N", match_rows=False, return_tilt=False):
-        ix, iy, iz = ind
-        frg = self.motif_grid[ix, iy, iz].fragments[0]
+        frg = self.get_motif(ind).ma
         if htyp == "N":
             v1 = frg_ref.HN
         elif htyp == "C":
@@ -88,7 +96,7 @@ class HPLattice(Lattice):
         torsions = np.zeros((self.nx, self.ny, self.nz))
 
         for ix, iy, iz in np.ndindex(self.nx, self.ny, self.nz):
-            frg_ref = lattice_ref.motif_grid[ix,iy,iz].fragments[0]
+            frg_ref = lattice_ref.get_motif((ix, iy, iz)).ma
             torsion = self.ma_torsion_removetilts(
                     (ix, iy, iz), frg_ref, htyp=htyp, 
                     match_rows=match_rows, return_tilt=False
@@ -103,7 +111,7 @@ class HPLattice(Lattice):
         tilts = np.zeros((self.nx, self.ny, self.nz))
 
         for ix, iy, iz in np.ndindex(self.nx, self.ny, self.nz):
-            frg_ref = lattice_ref.motif_grid[ix,iy,iz].fragments[0]
+            frg_ref = lattice_ref.get_motif((ix, iy, iz)).ma
             torsion, tilt = self.ma_torsion_removetilts(
                     (ix, iy, iz), frg_ref, htyp=htyp, 
                     match_rows=match_rows, return_tilt=True
@@ -114,36 +122,31 @@ class HPLattice(Lattice):
 
         return torsions, tilts
 
-    def ucell_localcellvecs(self, sys, pb_axis):
-        """Compute local cell vectors using Pb axes"""
-        or_ind, ax_inds = pb_axis
-        or_pos = sys.positions[or_ind]
-        ax_posvecs = sys.positions[ax_inds]
+    def ucell_localcellvecs(self, ind):
+        """Compute local cell vectors from the host fragments around a motif."""
+        return [np.array(v) for v in np.array(self.pb_environment_cell(ind))]
 
-        pmglattice = PmgLattice(self.cell)
-        or_fr = pmglattice.get_fractional_coords(or_pos)
-
-        vecs = []
-        for ax_pos in ax_posvecs:
-            ax_fr = pmglattice.get_fractional_coords(ax_pos)
-            svec = pbc_shortest_vectors(pmglattice, or_fr, ax_fr)[0]
-            vecs.append(svec[0])  # Extract the 3D vector
-
-        return vecs
-
-    def ucell_localcellparameters(self, sys, pb_axis):
-        """Compute local cell parameters: lengths, angles, volume"""
-        av, bv, cv = self.ucell_localcellvecs(sys, pb_axis)
+    def _localcellparameters_from_vecs(self, vecs):
+        av, bv, cv = vecs
         a, b, c = [np.linalg.norm(v) for v in [av, bv, cv]]
 
-        α = np.degrees(np.arccos(np.dot(bv, cv) / (b * c)))
-        β = np.degrees(np.arccos(np.dot(av, cv) / (a * c)))
-        γ = np.degrees(np.arccos(np.dot(av, bv) / (a * b)))
+        alpha = np.degrees(np.arccos(np.clip(np.dot(bv, cv) / (b * c), -1.0, 1.0)))
+        beta = np.degrees(np.arccos(np.clip(np.dot(av, cv) / (a * c), -1.0, 1.0)))
+        gamma = np.degrees(np.arccos(np.clip(np.dot(av, bv) / (a * b), -1.0, 1.0)))
 
         cellmat = np.column_stack([av, bv, cv])
         vol = np.linalg.det(cellmat)
 
-        return {'a': a, 'b': b, 'c': c, 'α': α, 'β': β, 'γ': γ, 'vol': vol}
+        return {
+            'a': a, 'b': b, 'c': c,
+            'alpha': alpha, 'beta': beta, 'gamma': gamma,
+            'α': alpha, 'β': beta, 'γ': gamma,
+            'vol': vol,
+        }
+
+    def ucell_localcellparameters(self, ind):
+        """Compute local cell parameters from the host fragments around a motif."""
+        return self._localcellparameters_from_vecs(self.ucell_localcellvecs(ind))
 
     def reciprocalvecs(self, h):
         """Compute reciprocal vectors for cell matrix h"""
@@ -152,28 +155,26 @@ class HPLattice(Lattice):
         g = np.array([np.cross(h[j], h[k]) / vol for i, j, k in [(0, 1, 2), (1, 2, 0), (2, 0, 1)]])
         return g
 
-    def ucell_theta_phi(self, sys, c_ind, n_ind, pb_axis, dir):
-        """Compute theta and phi for MA CN vector relative to local axes"""
+    def _theta_phi_from_vector(self, r, lcell, dir):
+        """Compute theta and phi for a vector relative to local cell row vectors."""
         lst = [(0, 1, 2), (1, 2, 0), (2, 0, 1)]
         i, j, k = lst[dir]
 
-        orig_pos = sys.positions[pb_axis[0]]
-        ax_positions = sys.positions[pb_axis[1]]
+        lcell = np.array(lcell)
+        theta = np.degrees(np.arccos(np.clip(
+            np.dot(r, lcell[i]) / (np.linalg.norm(r) * np.linalg.norm(lcell[i])),
+            -1.0,
+            1.0,
+        )))
 
-        pmglat = PmgLattice(self.cell)
-        orig_fr = pmglat.get_fractional_coords(orig_pos)
-        lcell = np.array([pbc_shortest_vectors(pmglat, orig_fr, pmglat.get_fractional_coords(ax_pos))[0][0] for ax_pos in ax_positions])
-
-        r = sys.positions[n_ind] - sys.positions[c_ind]
-
-        # theta
-        theta = np.degrees(np.arccos(np.dot(r, lcell[i]) / (np.linalg.norm(r) * np.linalg.norm(lcell[i]))))
-
-        # phi
         g = self.reciprocalvecs(lcell)
         vprp = np.dot(r, g[i]) * lcell[i]
         vpl = r - vprp
-        angb = np.dot(vpl, lcell[j]) / (np.linalg.norm(vpl) * np.linalg.norm(lcell[j]))
+        vpl_norm = np.linalg.norm(vpl)
+        if vpl_norm < 1e-12:
+            return theta, 90.0
+
+        angb = np.dot(vpl, lcell[j]) / (vpl_norm * np.linalg.norm(lcell[j]))
         angc = np.dot(vpl, g[k])
         phase = 1.0 if angc >= 0 else -1.0
         phi = phase * np.degrees(np.arccos(np.clip(angb, -1, 1)))
@@ -182,64 +183,51 @@ class HPLattice(Lattice):
 
         return theta, phi
 
-    def ucell_br_distance_from_plane(self, sys, pb_axis, br_axis, dir_pl, dir_br):
-        """Compute Br distance from plane defined by Pb axes"""
-        o_pb, ax_pb = pb_axis
-        pos_pb_orig = sys.positions[o_pb]
-        br_move_dir = list(set([0, 1, 2]) - set(dir_pl))[0]
+    def ucell_theta_phi(self, ind, dir):
+        """Compute theta and phi for the MA fragment in a motif."""
+        ma = self.get_motif(ind).ma
+        return self._theta_phi_from_vector(ma.N - ma.C, self.pb_environment_cell(ind), dir)
 
-        pmglat = PmgLattice(self.cell)
-        orig_fr = pmglat.get_fractional_coords(pos_pb_orig)
+    def all_ucell_theta_phi(self, dir):
+        """Compute MA theta/phi for every motif in the lattice."""
+        theta_vals = np.zeros((self.nx, self.ny, self.nz))
+        phi_vals = np.zeros((self.nx, self.ny, self.nz))
 
-        ax_vecs = []
-        for d in dir_pl:
-            ax_pos = sys.positions[ax_pb[d]]
-            ax_fr = pmglat.get_fractional_coords(ax_pos)
-            vec = pbc_shortest_vectors(pmglat, orig_fr, ax_fr)[0]
-            ax_vecs.append(vec)
+        for ind in np.ndindex(self.nx, self.ny, self.nz):
+            theta, phi = self.ucell_theta_phi(ind, dir)
+            theta_vals[ind] = theta
+            phi_vals[ind] = phi
 
-        pos_br = sys.positions[br_axis[dir_br]]
-        br_fr = pmglat.get_fractional_coords(pos_br)
-        pb_br_vec = pbc_shortest_vectors(pmglat, orig_fr, br_fr)[0]
+        return theta_vals, phi_vals
 
-        pln_perp_vec = np.cross(ax_vecs[0], ax_vecs[1])
-        norm_pln_perp = np.linalg.norm(pln_perp_vec)
-        if norm_pln_perp == 0:
-            return 0.0
-        pb_br_plnpperp_vec = (np.dot(pb_br_vec, pln_perp_vec) / norm_pln_perp**2) * pln_perp_vec
-        pb_br_plnparallelvec = pb_br_vec - pb_br_plnpperp_vec
-        pos_br_projection_pln = pos_pb_orig + pb_br_plnparallelvec
+    def ucell_br_distance_from_plane(self, ind, dir_pl, dir_br):
+        """Compute Br distance from a Pb plane using host fragments."""
+        return self.br_distance_from_plane(ind, dir_pl, dir_br)
 
-        proj_fr = pmglat.get_fractional_coords(pos_br_projection_pln)
-        br_pln_vec = pbc_shortest_vectors(pmglat, proj_fr, br_fr)[0]
+    def ucell_pb_br_pb_angle(self, ind, dir):
+        """Compute Pb-Br-Pb angle using host fragments."""
+        return self.pb_br_pb_angle(ind, dir)
 
-        gl_dist = np.linalg.norm(br_pln_vec) * np.sign(br_pln_vec[br_move_dir])
-        return gl_dist
+    def ucell_pb_br_pb_angle_hostrelative(self, ind, dir, dir_coup):
+        """Compute host-relative Pb-Br-Pb angle using host fragments."""
+        return self.pb_br_pb_angle_hostrelative(ind, dir, dir_coup)
 
-    def ucell_pb_br_pb_angle(self, sys, pb_axis, br_axis, dir):
-        """Compute Pb-Br-Pb angle"""
-        orig_pb = pb_axis[0]
-        mid_brs = br_axis
-        end_pbs = pb_axis[1]
-        ang = sys.get_angle(orig_pb, mid_brs[dir], end_pbs[dir])
-        return ang
-
-    def ucell_pb_br_pb_angle_hostrelative(self, sys, pb_axis, br_axis, dir, dir_coup):
-        """Compute Pb-Br-Pb angle with host-relative adjustment"""
-        orig_ang = self.ucell_pb_br_pb_angle(sys, pb_axis, br_axis, dir)
-        dir_pl = [dir, dir_coup]
-        pl_dist = self.ucell_br_distance_from_plane(sys, pb_axis, br_axis, dir_pl, dir)
-        if pl_dist > 0.0:
-            return 360.0 - orig_ang
-        else:
-            return orig_ang
-
-    def ucell_η_lat(self, sys, pb_axis, br_axis, dir_coup, ref=180.0, N=1.0):
-        """Compute lattice order parameter η"""
+    def ucell_η_lat(self, ind, dir_coup, ref=180.0, N=1.0):
+        """Compute lattice order parameter using host fragments."""
         br_dirs = [(dir_coup + 1) % 3, (dir_coup + 2) % 3]
-        θ_v = [self.ucell_pb_br_pb_angle_hostrelative(sys, pb_axis, br_axis, d, dir_coup) for d in br_dirs]
+        θ_v = [self.ucell_pb_br_pb_angle_hostrelative(ind, d, dir_coup) for d in br_dirs]
         V = [(θ - ref) / N for θ in θ_v]
         return V
+
+    ucell_eta_lat = ucell_η_lat
+
+    def all_ucell_η_lat(self, dir_coup, ref=180.0, N=1.0):
+        vals = np.zeros((self.nx, self.ny, self.nz, 2))
+        for ind in np.ndindex(self.nx, self.ny, self.nz):
+            vals[ind] = self.ucell_η_lat(ind, dir_coup, ref=ref, N=N)
+        return vals
+
+    all_ucell_eta_lat = all_ucell_η_lat
 
     def U_r(self, R, k_vec, MA=False):
         """Rotation matrix for order parameters"""
@@ -285,16 +273,25 @@ class HPLattice(Lattice):
             V /= np.linalg.norm(V)
         return V
 
-    def ucell_η_MA(self, sys, c_ind, n_ind, pb_axis, dir, **kwargs):
-        """Compute MA η for unit cell"""
-        θ, ϕ = self.ucell_theta_phi(sys, c_ind, n_ind, pb_axis, dir)
+    def ucell_η_MA(self, ind, dir, **kwargs):
+        """Compute MA η from the MA fragment in a motif."""
+        θ, ϕ = self.ucell_theta_phi(ind, dir)
         return self.ucell_η_MA_static(θ, ϕ, **kwargs)
+
+    ucell_eta_MA = ucell_η_MA
+
+    def all_ucell_η_MA(self, dir, **kwargs):
+        vals = np.zeros((self.nx, self.ny, self.nz, 2))
+        for ind in np.ndindex(self.nx, self.ny, self.nz):
+            vals[ind] = self.ucell_η_MA(ind, dir, **kwargs)
+        return vals
+
+    all_ucell_eta_MA = all_ucell_η_MA
 
     def ma_orientation(self, ind, ax):
         "MA orientations for unitcell specified by `ind` with respect to axis, `ax`"""
 
-        ix, iy, iz = ind
-        cn_vec = self.motif_grid[ix, iy, iz].fragments[0].CN
+        cn_vec = self.get_motif(ind).ma.CN
         lcell = self.pb_environment_cell(ind)
         vpl, t, p = proj2plane(ax, cn_vec, lcell)
 
@@ -325,16 +322,16 @@ class HPLattice(Lattice):
 
     def pb_environment_coords(self, ind):
         ax_positions = np.array([
-                self.get_motif(self.shift_index(ind, 0)).fragments[1].B,
-                self.get_motif(self.shift_index(ind, 1)).fragments[1].B,
-                self.get_motif(self.shift_index(ind, 2)).fragments[1].B
+                self.get_motif(self.shift_index(ind, 0)).host.B,
+                self.get_motif(self.shift_index(ind, 1)).host.B,
+                self.get_motif(self.shift_index(ind, 2)).host.B
             ])
 
         return ax_positions
 
     def pb_environment_cell(self, ind):
         ix, iy, iz = ind
-        o_host_frg = self.get_motif(ind).fragments[1]
+        o_host_frg = self.get_motif(ind).host
         o_pos = o_host_frg.B
         
         ax_positions = self.pb_environment_coords(ind)
@@ -348,8 +345,8 @@ class HPLattice(Lattice):
 
     def pb_br_pb_angle(self, ind, ax):
         ix, iy, iz = ind
-        hostfrg_orig = self.get_motif(ind).fragments[1]
-        hostfrg_ax = self.get_motif(self.shift_index(ind, ax)).fragments[1]
+        hostfrg_orig = self.get_motif(ind).host
+        hostfrg_ax = self.get_motif(self.shift_index(ind, ax)).host
 
         atoms_orig = hostfrg_orig.atoms
         atoms_ax = hostfrg_ax.atoms
@@ -374,21 +371,21 @@ class HPLattice(Lattice):
         return ang
 
     def br_environment_coords(self, ind):
-        o_host_frg = self.get_motif(ind).fragments[1]
+        o_host_frg = self.get_motif(ind).host
         
         ax_positions = np.array([
                 o_host_frg.X[0],
-                self.get_motif(self.shift_index(ind, 0, -1)).fragments[1].X[0],
+                self.get_motif(self.shift_index(ind, 0, -1)).host.X[0],
                 o_host_frg.X[1],
-                self.get_motif(self.shift_index(ind, 1, -1)).fragments[1].X[1],
+                self.get_motif(self.shift_index(ind, 1, -1)).host.X[1],
                 o_host_frg.X[2],
-                self.get_motif(self.shift_index(ind, 2, -1)).fragments[1].X[2],
+                self.get_motif(self.shift_index(ind, 2, -1)).host.X[2],
             ])
 
         return ax_positions
 
     def br_distance_from_plane(self, ind, pln, br_dir):
-        o_host_frg = self.get_motif(ind).fragments[1]
+        o_host_frg = self.get_motif(ind).host
         o_pos = o_host_frg.B
         pb_coords = self.pb_environment_coords(ind)
         br_coords = self.br_environment_coords(ind)
@@ -461,7 +458,7 @@ class LatticeTrajectory:
     def ma_self_correlation_P1(self):
         """MA self correlation with first order legendre polynomial P1"""
 
-        fn_get_cn = lambda x, ind: x.motif_grid[ind[0],ind[1],ind[2]].fragments[0].CN
+        fn_get_cn = lambda x, ind: x.get_motif(ind).ma.CN
         all_corr = []
         for ix, iy, iz in np.ndindex(self.nx, self.ny, self.nz):
             all_cn = [fn_get_cn(self.lattices[t], (ix, iy, iz)) for t in range(self.nt)]
@@ -474,7 +471,7 @@ class LatticeTrajectory:
     def ma_self_correlation_P2(self):
         """MA self correlation with first order legendre polynomial P2"""
 
-        fn_get_cn = lambda x, ind: x.motif_grid[ind[0],ind[1],ind[2]].fragments[0].CN
+        fn_get_cn = lambda x, ind: x.get_motif(ind).ma.CN
         all_corr = []
         for ix, iy, iz in np.ndindex(self.nx, self.ny, self.nz):
             all_cn = [fn_get_cn(self.lattices[t], (ix, iy, iz)) for t in range(self.nt)]

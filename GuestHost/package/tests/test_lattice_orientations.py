@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import unittest
 import guesthost as gh
@@ -6,7 +7,7 @@ from guesthost.analysis.functions_modules import print_file
 class TestLatticeOrientations(unittest.TestCase):
     def setUp(self):
         # Set up the test with required inputs
-        self.mpb_sys_ini_path = "structures/mpb_trajectory.xyz"  # Path to your input file
+        self.mpb_sys_ini_path = Path(__file__).parent / "structures" / "mpb_trajectory.xyz"  # Path to your input file
         self.trj = gh.Trajectory(self.mpb_sys_ini_path, order=True)
         self.n = 4  # Number of unitcells in each direction
         self.all_inds = [320, 384, 385, 386, 256, 387, 388, 389, 0, 64, 65, 66]
@@ -37,8 +38,9 @@ class TestLatticeOrientations(unittest.TestCase):
         p_dat = np.array(p_dat)
 
         # Load reference data
-        ref_t = np.loadtxt('reference_data/reference_thetas.dat')
-        ref_p = np.loadtxt('reference_data/reference_phis.dat')
+        ref_data_dir = Path(__file__).parent / "reference_data"
+        ref_t = np.loadtxt(ref_data_dir / "reference_thetas.dat")
+        ref_p = np.loadtxt(ref_data_dir / "reference_phis.dat")
 
         # Compare with reference data
         np.testing.assert_allclose(t_dat, ref_t, atol=1e-6, err_msg="Theta data does not match reference.")

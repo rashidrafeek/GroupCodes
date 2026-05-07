@@ -1,4 +1,5 @@
 from ase.io import read, write
+import itertools
 import copy
 import numpy as np
 import sys
@@ -56,6 +57,19 @@ class MethylAmmonium:
 
         return (b,plv)
 
+    def costheta(self,a,b):
+   
+        a1 = a/np.linalg.norm(a)
+        b1 = b/np.linalg.norm(b)
+        cst = np.dot(a1,b1)
+        #print(cst)
+        if cst < 0:
+           cst = max(cst,-1.0)
+        elif cst > 0:
+           cst = min(cst,1.0)
+
+        return cst
+
     def angle(self,a,b):
    
         a1 = a/np.linalg.norm(a)
@@ -103,6 +117,123 @@ class MethylAmmonium:
         th = th/float(n)
 
         return th
+
+    def caltorsion_atan(self, v1, htyp="N"):
+        """
+        Compute the signed average torsional rotation between two snapshots of an MA end-group.
+        Uses θ_i = atan2( n̂ · (u_i × v_i), u_i · v_i ) for each H and averages over the triad.
+        
+        Args:
+            v1  : (3,3) array of H coordinates at time t1 (rows = H1,H2,H3)
+            htyp: "N" -> compare to self.HN; "C" -> compare to self.HC (coordinates at time t2)
+
+        Returns:
+            Mean signed angle (radians) in (-pi, pi].
+        """
+        # Choose the comparison triad (time t2)
+        if htyp == "N":
+            v2 = self.HN
+        elif htyp == "C":
+            v2 = self.HC
+        else:
+            raise ValueError("htyp must be 'N' or 'C'")
+
+        # Center each triad and get the initial plane normal n̂ from v1
+        v1int, n_hat = self.planify(v1)
+        v2int, _     = self.planify(v2)  # plane of v2 not needed for the sign
+
+        n = v1int.shape[0]
+        eps = 1e-12
+        theta_sum = 0.0
+
+        for i in range(n):
+            u = v1int[i, :]
+            v = v2int[i, :]
+
+            # Normalize to remove any scale dependence
+            u /= max(np.linalg.norm(u), eps)
+            v /= max(np.linalg.norm(v), eps)
+
+            sin_term = np.dot(n_hat, np.cross(u, v))  # oriented sine component
+            cos_term = np.dot(u, v)                   # cosine component
+
+            theta_i = np.degrees(np.arctan2(sin_term, cos_term))  # signed angle in (-180, 180]
+            theta_sum += theta_i
+
+        return theta_sum / float(n)
+
+    def caltorsion_removetilts(self, v1, htyp="N", match_rows=False, return_tilt=False):
+        """
+        Signed torsion of a 3-H triad about its local C3 axis, cleaned of tumbling.
+        Implements: project the later vector triad into the initial plane, then
+        compute the oriented in-plane rotation and average over the three H's.
+
+        Args
+        ----
+        v1 : (3,3) array
+            H coordinates at time t1 (rows = H1,H2,H3).
+        htyp : {'N','C'}
+            Compare to self.HN (default) or self.HC at time t2.
+        match_rows : bool
+            If True, permute v2 rows to best match v1 (helps if H ordering changes).
+        return_tilt : bool
+            If True, also return the tilt angle between the two planes.
+
+        Returns
+        -------
+        theta : float
+            Mean signed torsion in radians in (-pi, pi].
+        (tilt) : float, optional
+            Tilt between the plane normals (0..pi).
+        """
+        # --- choose comparison triad (time t2)
+        if   htyp == "N": v2 = self.HN
+        elif htyp == "C": v2 = self.HC
+        else: raise ValueError("htyp must be 'N' or 'C'")
+
+        # --- center and get plane normals
+        v1int, n1 = self.planify(v1)   # initial triad & its normal (sign sets convention)
+        v2int, n2 = self.planify(v2)   # later triad (normal only used for 'tilt' output)
+
+        eps = 1e-12
+
+        # --- optionally fix hydrogen order by trying all 6 permutations
+        if match_rows:
+            best_score, best_perm = -np.inf, (0,1,2)
+            u_norms = np.linalg.norm(v1int, axis=1) + eps
+            for perm in itertools.permutations((0,1,2)):
+                w = v2int[list(perm)]
+                w_norms = np.linalg.norm(w, axis=1) + eps
+                # similarity score = sum of |cosine| between paired vectors
+                score = np.sum(np.abs(np.sum(v1int*w, axis=1) / (u_norms*w_norms)))
+                if score > best_score:
+                    best_score, best_perm = score, perm
+            v2int = v2int[list(best_perm)]
+
+        # --- project later vectors into the initial plane to remove tumbling
+        # row-wise: v2_proj_i = v2_i - (v2_i·n1) n1
+        proj_coeff = v2int @ n1              # shape (3,)
+        v2proj = v2int - proj_coeff[:, None] * n1
+
+        # --- compute oriented in-plane angle per H and average
+        theta_sum = 0.0
+        for u, v in zip(v1int, v2proj):
+            u = u / (np.linalg.norm(u) + eps)
+            v = v / (np.linalg.norm(v) + eps)
+            sin_term = np.dot(n1, np.cross(u, v))   # oriented sine in the n1 direction
+            cos_term = np.dot(u, v)                 # cosine
+            theta_sum += np.degrees(np.arctan2(sin_term, cos_term))
+
+        theta = theta_sum / 3.0
+
+        if return_tilt:
+            # tilt between plane normals (for diagnostics)
+            sin_tilt = np.linalg.norm(np.cross(n1, n2))
+            cos_tilt = np.dot(n1, n2)
+            tilt = np.degrees(np.arctan2(sin_tilt, cos_tilt))
+            return theta, tilt
+
+        return theta
 
 class Host:
 

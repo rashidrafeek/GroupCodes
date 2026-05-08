@@ -4,6 +4,25 @@
 classes for molecular fragments, host fragments, unit-cell motifs, lattices, and
 lattice trajectories.
 
+## Contents
+
+- [Installation](#installation)
+- [Data Model](#data-model)
+- [Basic Usage](#basic-usage)
+- [Unit-Cell Methods](#unit-cell-methods)
+  - [Local Cell Geometry](#local-cell-geometry)
+  - [MA Orientation And Order](#ma-orientation-and-order)
+  - [Host And Cage Metrics](#host-and-cage-metrics)
+  - [Index And Utility Methods](#index-and-utility-methods)
+- [Lattice-Wide Methods](#lattice-wide-methods)
+- [Layerwise And Global Order Parameters](#layerwise-and-global-order-parameters)
+- [Polar Order](#polar-order)
+- [Global Orthorhombic Cell Helpers](#global-orthorhombic-cell-helpers)
+- [Compute And Results IO](#compute-and-results-io)
+- [LAMMPS Trajectories](#lammps-trajectories)
+- [Unit-Cell Detection](#unit-cell-detection)
+- [Testing](#testing)
+
 ## Installation
 
 From the package root:

@@ -23,6 +23,7 @@ from guesthost.layerwise import (
     layerwise_eta_Lat,
     layerwise_eta_MA,
 )
+from guesthost.polar import polar_order_parameter
 from guesthost.constants import (
     HOST_INDICES_MPB,
     MA_INDICES_MPB,

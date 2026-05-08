@@ -32,6 +32,14 @@ from guesthost.global_cell import (
     global_cell_vectors_OR,
     global_cell_vectors_OR_fromcell,
 )
+from guesthost.compute import (
+    compute,
+    compute_default_functions,
+    compute_functions,
+    compute_trajectory,
+    load_results,
+    save_results,
+)
 from guesthost.constants import (
     HOST_INDICES_MPB,
     MA_INDICES_MPB,

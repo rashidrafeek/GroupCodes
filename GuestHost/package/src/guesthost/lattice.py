@@ -925,6 +925,18 @@ class LatticeTrajectory:
 
         return vals
 
+    def compute(self, func, **kwargs):
+        """Apply a unit-cell function to every lattice in the trajectory."""
+        from guesthost.compute import compute_trajectory
+
+        return compute_trajectory(self, func, **kwargs)
+
+    def compute_layerwise(self, func, **kwargs):
+        """Apply a layerwise/global function to every lattice in the trajectory."""
+        from guesthost.layerwise import compute_layerwise
+
+        return compute_layerwise(self, func, **kwargs)
+
     def ma_self_correlation_P1(self):
         """MA self correlation with first order legendre polynomial P1"""
 

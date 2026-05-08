@@ -22,7 +22,8 @@ dependencies = [
     "numpy>=1.21.0,<3.0.0",
     "ase",
     "pymatgen",
-    "networkx"
+    "networkx",
+    "h5py"
 ]
 
 [tool.setuptools.package-data]

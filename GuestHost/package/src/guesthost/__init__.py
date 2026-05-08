@@ -3,6 +3,7 @@ from guesthost.trajectory import MethylAmmonium, Host
 from guesthost.trajectory import unit_order_from_reference, unit_order_from_unitcell_data, unit_orders_from_unitcell_data
 from guesthost.lattice import Motif, Lattice, HPLattice, LatticeTrajectory
 from guesthost.unitcells import get_unitcell_indexdata
+from guesthost.io import load_system_from_xyz
 from guesthost.layerwise import (
     compute_all_ucells,
     compute_all_ucells_data,

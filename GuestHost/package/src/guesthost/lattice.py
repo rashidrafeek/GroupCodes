@@ -627,6 +627,120 @@ class HPLattice(Lattice):
         mid_brs = [int(i) for i in self.get_motif(ind).host.indices[1:4]]
         return tuple((origin, mid_brs[i], end_pbs[i]) for i in range(3))
 
+    def _pb_index_scaled_positions(self):
+        cell = np.array(self.cell, dtype=float)
+        invcell = np.linalg.inv(cell)
+        entries = []
+        for ind in np.ndindex(self.nx, self.ny, self.nz):
+            host = self.get_motif(ind).host
+            scaled = np.asarray(host.B, dtype=float) @ invcell
+            entries.append((int(host.indices[0]), scaled, np.asarray(host.B, dtype=float)))
+        return entries
+
+    def get_global_index_data(self):
+        """Return Pb index data used for orthorhombic global cell vectors."""
+        entries = self._pb_index_scaled_positions()
+        cell = np.array(self.cell, dtype=float)
+
+        def closest_atom(target_frac):
+            best = None
+            best_d = np.inf
+            target_frac = np.asarray(target_frac, dtype=float)
+            for idx, scaled, _pos in entries:
+                diff = scaled - target_frac
+                diff -= np.round(diff)
+                disp = diff @ cell
+                dist = np.linalg.norm(disp)
+                if dist < best_d:
+                    best = idx
+                    best_d = dist
+            return best
+
+        axes_OR = []
+        for dir_coup in range(3):
+            perp = [(1, 2), (2, 0), (0, 1)][dir_coup]
+            fr_origin = np.zeros(3)
+            fr_origin[perp[0]] = 0.5
+            pb_origin = closest_atom(fr_origin)
+
+            fr_endpt = np.zeros(3)
+            fr_endpt[perp[1]] = 0.5
+            pb_endpt = closest_atom(fr_endpt)
+
+            axes_OR.append((pb_origin, pb_endpt))
+
+        return {"supercell_size": self.nx, "axes_OR": axes_OR}
+
+    def _scaled_by_pb_index(self):
+        return {idx: scaled for idx, scaled, _pos in self._pb_index_scaled_positions()}
+
+    def global_cell_vectors_OR(self, dir=0, global_data=None):
+        """Compute global orthorhombic cell vectors from Pb positions."""
+        if global_data is None:
+            global_data = self.get_global_index_data()
+        perp = [(1, 2), (2, 0), (0, 1)][dir]
+        cell = np.array(self.cell, dtype=float)
+        scaled_by_index = self._scaled_by_pb_index()
+        a_OR = cell[dir]
+
+        pb_origin, pb_endpt = global_data["axes_OR"][dir]
+        fr_origin = scaled_by_index[pb_origin].copy()
+        if fr_origin[dir] > 0.5:
+            fr_origin[dir] -= 1.0
+        if fr_origin[perp[1]] > 0.5:
+            fr_origin[perp[1]] -= 1.0
+        pos_origin = fr_origin @ cell
+
+        fr_endpt = scaled_by_index[pb_endpt].copy()
+        if fr_endpt[dir] > 0.5:
+            fr_endpt[dir] -= 1.0
+        if fr_endpt[perp[0]] > 0.5:
+            fr_endpt[perp[0]] -= 1.0
+        pos_endpt_c = fr_endpt @ cell
+
+        fr_endpt_b = fr_endpt.copy()
+        fr_endpt_b[perp[0]] += 1.0
+        pos_endpt_b = fr_endpt_b @ cell
+
+        b_OR = pos_endpt_b - pos_origin
+        c_OR = pos_endpt_c - pos_origin
+        return [np.array(a_OR), np.array(b_OR), np.array(c_OR)]
+
+    def global_cell_vectors_OR_fromcell(self, dir=0):
+        """Compute ideal orthorhombic cell vectors from the simulation cell."""
+        dirb, dirc = [(1, 2), (2, 0), (0, 1)][dir]
+        cell = np.array(self.cell, dtype=float)
+        a_OR = 2.0 * cell[dir]
+        b_OR = cell[dirb] - cell[dirc]
+        c_OR = cell[dirb] + cell[dirc]
+        return [a_OR, b_OR, c_OR]
+
+    def global_cell_lengths_angles_OR(self, dir=0, global_data=None, fromcell=False):
+        """Return global orthorhombic cell lengths and angles."""
+        if fromcell:
+            vecs = self.global_cell_vectors_OR_fromcell(dir=dir)
+        else:
+            vecs = self.global_cell_vectors_OR(dir=dir, global_data=global_data)
+        params = self._localcellparameters_from_vecs(vecs)
+        return (
+            (params["a"], params["b"], params["c"]),
+            (params["alpha"], params["beta"], params["gamma"]),
+        )
+
+    def global_cell_lengths_OR(self, dir=0, global_data=None, fromcell=False):
+        """Return global orthorhombic cell lengths."""
+        lengths, _angles = self.global_cell_lengths_angles_OR(
+            dir=dir, global_data=global_data, fromcell=fromcell
+        )
+        return list(lengths)
+
+    def global_cell_angles_OR(self, dir=0, global_data=None, fromcell=False):
+        """Return global orthorhombic cell angles."""
+        _lengths, angles = self.global_cell_lengths_angles_OR(
+            dir=dir, global_data=global_data, fromcell=fromcell
+        )
+        return list(angles)
+
     def ma_orientation(self, ind, ax):
         "MA orientations for unitcell specified by `ind` with respect to axis, `ax`"""
 

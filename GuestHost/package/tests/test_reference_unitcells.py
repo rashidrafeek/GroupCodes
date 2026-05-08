@@ -76,6 +76,16 @@ def test_unitcell_detector_matches_cached_json_4x4x4():
     assert gh.UNITCELL_INDEXDATA_MPB_4x4x4 == expected
 
 
+def test_unitcell_detector_can_include_ortho_axes():
+    computed = gh.get_unitcell_indexdata(gh.MPB_SYS_4x4x4, ortho_axes=True)
+    first = computed[0]
+
+    assert "pb_ortho_axes" in first
+    assert "pb_ortho_axes_small" in first
+    assert first["pb_ortho_axes_small"] == (0, [[16, 7, 5], [4, 49, 17], [1, 20, 52]])
+    assert first["pb_ortho_axes"] == (0, [[32, 7, 5], [8, 49, 17], [2, 20, 52]])
+
+
 def test_reference_lattice_builder_matches_manual_lattice():
     trj = _trajectory()
     manual = _manual_lattices(trj)[1]

@@ -83,6 +83,67 @@ def _build_br_axes(lattice, frac_coords, origin_idx, axis_vecs, br_indices, br_n
     return br_axis, br_axis_neg
 
 
+def _get_pb_ortho_axes(
+    lattice,
+    frac_coords,
+    origin_idx,
+    axis_vecs,
+    pb_axis,
+    pb_indices_second,
+    pb_indices_fourth,
+    shift_val,
+    shift_val_pc=None,
+):
+    reqvecs = (
+        (np.array([0.0, 1.0, -1.0]), np.array([0.0, 1.0, 1.0])),
+        (np.array([-1.0, 0.0, 1.0]), np.array([1.0, 0.0, 1.0])),
+        (np.array([1.0, 1.0, 0.0]), np.array([-1.0, 1.0, 0.0])),
+    )
+
+    ortho_axes = []
+    for i in range(3):
+        base = pb_axis[1][i]
+        dir1 = (
+            reqvecs[i][0][0] * axis_vecs[0]
+            + reqvecs[i][0][1] * axis_vecs[1]
+            + reqvecs[i][0][2] * axis_vecs[2]
+        )
+        dir2 = (
+            reqvecs[i][1][0] * axis_vecs[0]
+            + reqvecs[i][1][1] * axis_vecs[1]
+            + reqvecs[i][1][2] * axis_vecs[2]
+        )
+
+        idx1 = _closest_along_direction(
+            lattice, frac_coords, origin_idx, dir1, shift_val, pb_indices_second
+        )
+        idx2 = _closest_along_direction(
+            lattice, frac_coords, origin_idx, dir2, shift_val, pb_indices_second
+        )
+
+        axis0 = base
+        if shift_val_pc is not None and len(pb_indices_fourth) > 0:
+            axis0_candidate = _closest_along_direction(
+                lattice,
+                frac_coords,
+                origin_idx,
+                axis_vecs[i],
+                shift_val_pc,
+                pb_indices_fourth,
+            )
+            if axis0_candidate is not None:
+                axis0 = axis0_candidate
+
+        axis_list = [int(axis0)]
+        if idx1 is not None:
+            axis_list.append(int(idx1))
+        if idx2 is not None:
+            axis_list.append(int(idx2))
+        ortho_axes.append(axis_list)
+
+    return (int(origin_idx), ortho_axes)
+
+
 def _get_pb_inds_orig_env(lattice, frac_coords, c_ind, n_ind, pb_indices, cutoff=6.0):
     c_pos = lattice.get_cartesian_coords(frac_coords[c_ind])
     n_pos = lattice.get_cartesian_coords(frac_coords[n_ind])
@@ -146,6 +207,7 @@ def get_unitcell_indexdata(
     br_orig_cutoff=4.5,
     exclude_br_axis=False,
     pb_orig_shift_val=5.926,
+    ortho_axes=False,
 ):
     """Extract MAPbBr3 unit-cell index data from an ASE Atoms reference."""
     struct = Structure(
@@ -215,6 +277,44 @@ def get_unitcell_indexdata(
             )
             unitcell_data["br_axis"] = br_axis
             unitcell_data["br_axis_neg"] = br_axis_neg
+
+        if ortho_axes:
+            pb_dists_from_origin = [
+                np.linalg.norm(_shortest_vec(lattice, frac_coords, origin_pb, idx))
+                for idx in pb_indices
+            ]
+            pb_inds_second = [
+                idx
+                for idx, dist in zip(pb_indices, pb_dists_from_origin)
+                if cage_cutoff < dist <= np.sqrt(2) * cage_cutoff
+            ]
+            pb_inds_fourth = [
+                idx
+                for idx, dist in zip(pb_indices, pb_dists_from_origin)
+                if np.sqrt(3) * cage_cutoff < dist <= 2 * cage_cutoff
+            ]
+            unitcell_data["pb_ortho_axes_small"] = _get_pb_ortho_axes(
+                lattice,
+                frac_coords,
+                origin_pb,
+                axis_vecs,
+                pb_axis,
+                pb_inds_second,
+                [],
+                shift_val=np.sqrt(2) * pb_orig_shift_val,
+                shift_val_pc=None,
+            )
+            unitcell_data["pb_ortho_axes"] = _get_pb_ortho_axes(
+                lattice,
+                frac_coords,
+                origin_pb,
+                axis_vecs,
+                pb_axis,
+                pb_inds_second,
+                pb_inds_fourth,
+                shift_val=np.sqrt(2) * pb_orig_shift_val,
+                shift_val_pc=2 * pb_orig_shift_val,
+            )
 
         unitcell_indexdata.append(unitcell_data)
 

@@ -484,7 +484,15 @@ class Trajectory:
                 host = Host(local_host_inds)
                 host.assign(positions[host_global], indices=host_global, atoms=frame[host_global])
 
-                motifs.append(Motif([ma, host]))
+                br_cage_global = np.array(udata["br_inds"], dtype=int)
+                motifs.append(
+                    Motif(
+                        [ma, host],
+                        unitcell_data=udata,
+                        br_cage_coords=positions[br_cage_global],
+                        br_cage_indices=br_cage_global,
+                    )
+                )
 
             lattices.append(HPLattice(motifs, self.cells[iframe], nx, ny, nz))
 

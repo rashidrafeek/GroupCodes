@@ -32,11 +32,10 @@ The main objects are:
 ## Basic Usage
 
 ```python
-from pathlib import Path
+from importlib.resources import files
 import guesthost as gh
 
-pkg_root = Path(gh.__file__).resolve().parents[2]
-data_path = pkg_root / "tests" / "structures" / "mpb_trajectory.xyz"
+data_path = files("guesthost").joinpath("data", "structures", "mpb_trajectory.xyz")
 
 trj = gh.Trajectory(str(data_path), order=True)
 
@@ -52,6 +51,16 @@ theta, phi = lattice.ucell_theta_phi(ind, dir=0)
 params = lattice.ucell_localcellparameters(ind)
 eta_ma = lattice.ucell_eta_MA(ind, dir=0)
 eta_lat = lattice.ucell_eta_lat(ind, dir_coup=0)
+```
+
+Individual XYZ structures can be loaded with ASE through the package helper:
+
+```python
+from importlib.resources import files
+import guesthost as gh
+
+data_path = files("guesthost").joinpath("data", "structures", "mpb_cubic_4x4x4.xyz")
+system = gh.load_system_from_xyz(data_path)
 ```
 
 Unit-cell data can also be inferred from a reference structure:
@@ -178,9 +187,192 @@ For trajectory-level analysis:
 
 ```python
 lattraj = gh.LatticeTrajectory(lattices)
-theta_phi_per_frame = lattraj.compute_for_all(
-    lambda lat: lat.ucell_theta_phi((0, 0, 0), dir=0)
+theta_phi_per_frame = lattraj.compute(gh.HPLattice.ucell_theta_phi, dir=0)
+xi_ma_per_frame = lattraj.compute_layerwise(gh.global_xi_MA, dir=0)
+```
+
+## Layerwise And Global Order Parameters
+
+Layerwise functions operate on a complete `HPLattice`. They reduce unit-cell
+quantities into layer-resolved or system-wide order parameters.
+
+```python
+omega_lat = gh.layerwise_OmegaLat(lattice, dir_coup=0)
+eta_lat_layers = gh.layerwise_eta_Lat(lattice, dir_coup=0)
+xi_lat_layers = gh.global_layerwise_xi(lattice, dir_coup=0)
+
+omega_ma = gh.layerwise_OmegaMA(lattice, dir=0)
+eta_ma_layers = gh.layerwise_eta_MA(lattice, dir=0)
+xi_ma = gh.global_xi_MA(lattice, dir=0)
+
+omega_coupling = gh.layerwise_OmegaCoupling(lattice, dir=0)
+xi_coupling = gh.global_xi_coupling(lattice, dir=0)
+volume = gh.global_volume_local(lattice)
+```
+
+Available layerwise/global helpers:
+
+| Function | Description |
+| --- | --- |
+| `compute_all_ucells(func, lattice, **kwargs)` | Apply a unit-cell callable to every unit cell and return a flat list. |
+| `compute_all_ucells_matrix(func, lattice, order=None, cellshape=None, **kwargs)` | Apply a unit-cell callable and return an object matrix. |
+| `compute_all_ucells_data(func, lattice, order=None, cellshape=None, **kwargs)` | Apply a unit-cell callable and keep arbitrary return data. |
+| `layerwise_OmegaLat(lattice, dir_coup, ...)` | Layer-resolved lattice omega order parameter. |
+| `layerwise_eta_Lat(lattice, dir_coup, ...)` | Layer-resolved scalar lattice eta projection. |
+| `global_layerwise_xi(lattice, dir_coup, ...)` | Layer-resolved xi from lattice omega values. |
+| `global_layerwise_eta_alloctahedra(lattice, dir_coup, ...)` | Layer-resolved octahedral eta values. |
+| `global_layerwise_xi_alloctahedra(lattice, dir_coup, ...)` | Layer-resolved octahedral xi matrices. |
+| `global_layerwise_xi_new(lattice, dir_coup, ...)` | Mean xi for each layer. |
+| `layerwise_OmegaMA(lattice, dir, ...)` | Layer-resolved MA omega order parameter. |
+| `layerwise_eta_MA(lattice, dir, ...)` | Layer-resolved scalar MA eta projection. |
+| `global_xi_MA(lattice, dir, ...)` | Global MA xi order parameter. |
+| `layerwise_OmegaCoupling(lattice, dir, ...)` | Layer-resolved lattice-MA coupling omega. |
+| `global_xi_coupling(lattice, dir, ...)` | Global lattice-MA coupling xi. |
+| `global_volume_local(lattice)` | Mean local cell volume. |
+| `global_xi(lattice, dir_coup, ...)` | Global lattice xi order parameter. |
+| `global_S(lattice, dir_coup, ...)` | Layer autocorrelation-like `S` values. |
+
+## Polar Order
+
+The polar order parameter is derived from nearest-neighbor differences in MA
+`phi` angles along a coupling direction.
+
+```python
+polar = gh.polar_order_parameter(lattice, dir_coup=0)
+
+dphi = polar["dphi"]
+z = polar["z"]
+chain_order = polar["S_chain"]
+```
+
+The result dictionary contains `dphi`, `z`, `z_pi`, `z_pi_by2`,
+`z_chain`, `z_chain_pi`, `z_chain_pi_by2`, `S_chain`, `S_chain_pi`, and
+`S_chain_pi_by2`.
+
+## Global Orthorhombic Cell Helpers
+
+Global orthorhombic cell helpers describe the whole lattice cell, not a single
+unit cell.
+
+```python
+global_data = gh.get_global_index_data(lattice)
+
+vecs = gh.global_cell_vectors_OR(lattice, dir=0, global_data=global_data)
+lengths, angles = gh.global_cell_lengths_angles_OR(lattice, dir=0)
+
+lengths_from_cell = gh.global_cell_lengths_OR(lattice, dir=0, fromcell=True)
+angles_from_cell = gh.global_cell_angles_OR(lattice, dir=0, fromcell=True)
+```
+
+## Compute And Results IO
+
+The compute helpers accept `HPLattice` methods or callables shaped like
+`func(lattice, ind, **kwargs)`.
+
+```python
+values = gh.compute(lattice, gh.HPLattice.ucell_localcelllengths)
+
+lattraj = gh.LatticeTrajectory(lattices[:2])
+theta_phi = gh.compute_trajectory(lattraj, gh.HPLattice.ucell_theta_phi, dir=0)
+
+bundle = gh.compute_functions(
+    lattraj,
+    [
+        (gh.HPLattice.ucell_theta_phi, {"dir": 0}, False),
+        (gh.global_xi_MA, {"dir": 0}, True),
+    ],
 )
+
+default_bundle = gh.compute_default_functions(lattice, cellshape=(4, 4, 4))
+```
+
+Results can be saved to and loaded from HDF5:
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import guesthost as gh
+
+with TemporaryDirectory() as tmpdir:
+    out = Path(tmpdir) / "analysis_results.h5"
+    gh.save_results(out, {"xi_ma": bundle["layerwise:global_xi_MA(dir=0)"]})
+    loaded = gh.load_results(out)
+```
+
+If a `LatticeTrajectory` has `times` or `steps` attributes, `save_results`
+writes them as `time` and `steps` datasets.
+
+## LAMMPS Trajectories
+
+LAMMPS dump files can be loaded directly into a `LatticeTrajectory`.
+Frame selections use one-based frame numbers.
+
+```python
+from pathlib import Path
+import guesthost as gh
+
+pkg_root = Path(gh.__file__).resolve().parents[2]
+dump_path = pkg_root / "tests" / "structures" / "lammps_trajectory" / "trajectory.lmp"
+
+lattraj = gh.load_lammps_trajectory(
+    dump_path,
+    unitcell_data=gh.UNITCELL_INDEXDATA_MPB_4x4x4,
+    supercell_size=(4, 4, 4),
+    steps=range(1, 3),
+)
+
+theta_phi = lattraj.compute(gh.HPLattice.ucell_theta_phi, dir=0)
+xi_ma = lattraj.compute_layerwise(gh.global_xi_MA, dir=0)
+```
+
+Multiple dump directories can be loaded with `load_lammps_trajectories`:
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import guesthost as gh
+
+pkg_root = Path(gh.__file__).resolve().parents[2]
+fixture_dir = pkg_root / "tests" / "structures" / "lammps_trajectory"
+
+with TemporaryDirectory() as tmpdir:
+    run_dir = Path(tmpdir) / "01_npt1.1gpa"
+    run_dir.mkdir()
+    for name in ("trajectory.lmp", "log.lammps"):
+        (run_dir / name).write_bytes((fixture_dir / name).read_bytes())
+
+    trajs = gh.load_lammps_trajectories(
+        tmpdir,
+        unitcell_data=gh.UNITCELL_INDEXDATA_MPB_4x4x4,
+        supercell_size=(4, 4, 4),
+        mddir_regex=r"^01",
+        dump_regex=r"trajectory\.lmp$",
+        steps=1,
+    )
+```
+
+For production data, point `load_lammps_trajectories` at the directory that
+contains the matching run subdirectories and adjust `mddir_regex` and
+`dump_regex` to match the local naming scheme.
+
+
+## Unit-Cell Detection
+
+`get_unitcell_indexdata` extracts unit-cell index metadata from an ASE system.
+By default it returns the fields used by the cached package constants.
+
+```python
+unitcell_data = gh.get_unitcell_indexdata(gh.MPB_SYS_4x4x4)
+```
+
+Optional orthorhombic Pb-axis metadata can be requested when needed:
+
+```python
+unitcell_data = gh.get_unitcell_indexdata(gh.MPB_SYS_4x4x4, ortho_axes=True)
+
+first = unitcell_data[0]
+ortho_axes = first["pb_ortho_axes"]
+ortho_axes_small = first["pb_ortho_axes_small"]
 ```
 
 ## Testing

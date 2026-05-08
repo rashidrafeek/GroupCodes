@@ -40,19 +40,9 @@ data_path = pkg_root / "tests" / "structures" / "mpb_trajectory.xyz"
 
 trj = gh.Trajectory(str(data_path), order=True)
 
-n = 4
-all_inds = [320, 384, 385, 386, 256, 387, 388, 389, 0, 64, 65, 66]
-ma_inds = [0, 1, 2, 3, 4, 5, 6, 7]
-host_inds = [8, 9, 10, 11]
-
-lattices = trj.create_lattice(
-    64,
-    [ma_inds, host_inds],
-    [gh.MethylAmmonium, gh.Host],
-    (n, n, n),
-    gh.HPLattice,
-    ordering="type",
-    unit_order=all_inds,
+lattices = trj.create_hplattice(
+    unitcell_data=gh.UNITCELL_INDEXDATA_MPB_4x4x4,
+    supercell_size=(4, 4, 4),
 )
 
 lattice = lattices[1]
@@ -62,6 +52,26 @@ theta, phi = lattice.ucell_theta_phi(ind, dir=0)
 params = lattice.ucell_localcellparameters(ind)
 eta_ma = lattice.ucell_eta_MA(ind, dir=0)
 eta_lat = lattice.ucell_eta_lat(ind, dir_coup=0)
+```
+
+Unit-cell data can also be inferred from a reference structure:
+
+```python
+lattices = trj.create_hplattice(
+    reference=trj.atoms_list[0],
+    supercell_size=(4, 4, 4),
+)
+```
+
+Packaged MAPbBr3 reference structures and unit-cell data are available as
+constants:
+
+```python
+system_4 = gh.MPB_SYS_4x4x4
+unitcells_4 = gh.UNITCELL_INDEXDATA_MPB_4x4x4
+
+system_8 = gh.MPB_SYS_8x8x8
+unitcells_8 = gh.UNITCELL_INDEXDATA_MPB_8x8x8
 ```
 
 ## Unit-Cell Methods
@@ -112,5 +122,5 @@ From the package root:
 python -m pytest tests
 ```
 
-The tests include reference-data checks and parity checks against
-`perovskite_analysis` for selected unit-cell quantities.
+The tests include reference-data checks for lattice construction, orientations,
+and torsions.

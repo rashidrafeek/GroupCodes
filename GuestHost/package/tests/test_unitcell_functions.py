@@ -9,16 +9,10 @@ class TestUnitcellFunctions(unittest.TestCase):
         self.mpb_sys_ini_path = Path(__file__).parent / "structures" / "mpb_trajectory.xyz"
         self.trj = gh.Trajectory(self.mpb_sys_ini_path, order=True)
         self.n = 4  # Number of unitcells in each direction
-        self.all_inds = [320, 384, 385, 386, 256, 387, 388, 389, 0, 64, 65, 66]
-        self.ma_inds = [0, 1, 2, 3, 4, 5, 6, 7]
-        self.host_inds = [8, 9, 10, 11]
 
-        # Fragmentize and create lattices following test_lattice_orientations.py
-        ma_lists = self.trj.fragmentize(64, self.ma_inds, gh.MethylAmmonium, ordering="unitcell")
-        host_lists = self.trj.fragmentize(64, self.host_inds, gh.Host, ordering="unitcell")
-        lattices = self.trj.create_lattice(
-            64, [self.ma_inds, self.host_inds], [gh.MethylAmmonium, gh.Host],
-            (self.n, self.n, self.n), gh.HPLattice, ordering="type", unit_order=self.all_inds
+        lattices = self.trj.create_hplattice(
+            unitcell_data=gh.UNITCELL_INDEXDATA_MPB_4x4x4,
+            supercell_size=(self.n, self.n, self.n),
         )
         self.lattraj = gh.LatticeTrajectory(lattices)
 

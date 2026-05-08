@@ -4,6 +4,14 @@ import copy
 import numpy as np
 import sys
 from guesthost.lattice import Motif, Lattice
+from guesthost.unitcells import (
+    get_unitcell_indexdata,
+    host_indices_from_unitcell_data,
+    ma_indices_from_unitcell_data,
+    unit_order_from_reference,
+    unit_order_from_unitcell_data,
+    unit_orders_from_unitcell_data,
+)
 
 class MethylAmmonium:
 
@@ -439,3 +447,62 @@ class Trajectory:
             lattices.append(lattice)
 
         return lattices
+
+    def create_hplattice_from_unitcell_data(self, unitcell_data, supercell_size=None):
+        """Create HPLattice objects from explicit unit-cell index data."""
+        from guesthost.lattice import HPLattice
+
+        if supercell_size is None:
+            ncells = len(unitcell_data)
+            n = round(ncells ** (1 / 3))
+            if n ** 3 != ncells:
+                raise ValueError("Pass supercell_size=(nx, ny, nz) for non-cubic systems.")
+            supercell_size = (n, n, n)
+        else:
+            ncells = int(np.prod(supercell_size))
+
+        if len(unitcell_data) != ncells:
+            raise ValueError(
+                f"unitcell_data has {len(unitcell_data)} cells, expected {ncells}."
+            )
+
+        nx, ny, nz = supercell_size
+        lattices = []
+        local_ma_inds = np.arange(8)
+        local_host_inds = np.arange(4)
+
+        for iframe, frame in enumerate(self.atoms_list):
+            motifs = []
+            positions = self.coords[iframe]
+            for udata in unitcell_data:
+                ma_global = np.array(ma_indices_from_unitcell_data(udata), dtype=int)
+                host_global = np.array(host_indices_from_unitcell_data(udata), dtype=int)
+
+                ma = MethylAmmonium(local_ma_inds)
+                ma.assign(positions[ma_global], indices=ma_global, atoms=frame[ma_global])
+
+                host = Host(local_host_inds)
+                host.assign(positions[host_global], indices=host_global, atoms=frame[host_global])
+
+                motifs.append(Motif([ma, host]))
+
+            lattices.append(HPLattice(motifs, self.cells[iframe], nx, ny, nz))
+
+        return lattices
+
+    def create_hplattice_from_reference(self, reference=None, supercell_size=None, **kwargs):
+        """Infer unit-cell index data from a reference frame and create HPLattices."""
+        if reference is None:
+            reference = self.atoms_list[0]
+        unitcell_data = get_unitcell_indexdata(reference, **kwargs)
+        return self.create_hplattice_from_unitcell_data(unitcell_data, supercell_size=supercell_size)
+
+    def create_hplattice(self, supercell_size=None, unitcell_data=None, reference=None, **kwargs):
+        """Create HPLattice objects using unit-cell data or a reference structure."""
+        if unitcell_data is not None:
+            return self.create_hplattice_from_unitcell_data(unitcell_data, supercell_size=supercell_size)
+        return self.create_hplattice_from_reference(
+            reference=reference,
+            supercell_size=supercell_size,
+            **kwargs,
+        )

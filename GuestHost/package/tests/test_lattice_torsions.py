@@ -11,15 +11,11 @@ class TestLatticeTorsions(unittest.TestCase):
         self.pref = "test"  # Prefix for file names
         self.n = 4  # Number of unitcells in each direction
         self.trj = gh.Trajectory(self.mpb_sys_ini_path)
-        self.all_inds = [320, 384, 385, 386, 256, 387, 388, 389, 0, 64, 65, 66]
-        self.ma_inds = [0, 1, 2, 3, 4, 5, 6, 7]
-        self.host_inds = [8, 9, 10, 11]
 
     def test_lattice_torsions(self):
-        # Fragmentize and get torsion data
-        lattices = self.trj.create_lattice(
-            64, [self.ma_inds, self.host_inds], [gh.MethylAmmonium, gh.Host],
-            (self.n, self.n, self.n), gh.HPLattice, ordering="type", unit_order=self.all_inds
+        lattices = self.trj.create_hplattice(
+            unitcell_data=gh.UNITCELL_INDEXDATA_MPB_4x4x4,
+            supercell_size=(self.n, self.n, self.n),
         )
         lattraj = gh.LatticeTrajectory(lattices)
         

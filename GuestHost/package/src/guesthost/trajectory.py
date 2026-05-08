@@ -328,6 +328,22 @@ class Trajectory:
         self.nat = len(self.coords[0])
         self.nt = len(self.coords)
 
+    @classmethod
+    def from_atoms_list(cls, atoms_list):
+        """Create a Trajectory from an in-memory sequence of ASE Atoms."""
+        obj = cls.__new__(cls)
+        obj.coords = []
+        obj.sym = []
+        obj.cells = []
+        obj.atoms_list = list(atoms_list)
+        for atoms in obj.atoms_list:
+            obj.coords.append(atoms.positions)
+            obj.cells.append(atoms.get_cell().array)
+        obj.sym = np.array(obj.atoms_list[0].get_chemical_symbols())
+        obj.nat = len(obj.coords[0])
+        obj.nt = len(obj.coords)
+        return obj
+
     def readase(self, fname):
         # Read using ase
         atoms_list = read(fname, index=":")

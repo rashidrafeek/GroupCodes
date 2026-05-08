@@ -40,6 +40,10 @@ from guesthost.compute import (
     load_results,
     save_results,
 )
+from guesthost.lammps import (
+    load_lammps_trajectories,
+    load_lammps_trajectory,
+)
 from guesthost.constants import (
     HOST_INDICES_MPB,
     MA_INDICES_MPB,

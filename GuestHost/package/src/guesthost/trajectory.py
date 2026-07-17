@@ -3,7 +3,7 @@ import itertools
 import copy
 import numpy as np
 import sys
-from guesthost.lattice import Motif, Lattice
+from guesthost.lattice import Motif, Lattice, reference_pb_coordinates
 from guesthost.unitcells import (
     get_unitcell_indexdata,
     host_indices_from_unitcell_data,
@@ -464,8 +464,15 @@ class Trajectory:
 
         return lattices
 
-    def create_hplattice_from_unitcell_data(self, unitcell_data, supercell_size=None):
-        """Create HPLattice objects from explicit unit-cell index data."""
+    def create_hplattice_from_unitcell_data(
+        self, unitcell_data, supercell_size=None, reference=None
+    ):
+        """Create HPLattices using a fixed reference Pb-index grid.
+
+        `reference` supplies the Pb coordinates used to assign motifs to fixed
+        grid positions. A matching packaged MAPbBr3 reference is used when
+        available; otherwise the first trajectory frame is a fixed fallback.
+        """
         from guesthost.lattice import HPLattice
 
         if supercell_size is None:
@@ -483,12 +490,27 @@ class Trajectory:
             )
 
         nx, ny, nz = supercell_size
+        if reference is None:
+            from guesthost.constants import (
+                MPB_SYS_4x4x4, MPB_SYS_8x8x8,
+                UNITCELL_INDEXDATA_MPB_4x4x4, UNITCELL_INDEXDATA_MPB_8x8x8,
+            )
+            packaged = {
+                64: (MPB_SYS_4x4x4, UNITCELL_INDEXDATA_MPB_4x4x4),
+                512: (MPB_SYS_8x8x8, UNITCELL_INDEXDATA_MPB_8x8x8),
+            }.get(ncells)
+            if packaged is not None and [u["pb_axis"] for u in unitcell_data] == [u["pb_axis"] for u in packaged[1]]:
+                reference = packaged[0]
+            else:
+                reference = self.atoms_list[0]
+        coordinate_by_pb = reference_pb_coordinates(reference, unitcell_data, (nx, ny, nz))
         lattices = []
         local_ma_inds = np.arange(8)
         local_host_inds = np.arange(4)
 
         for iframe, frame in enumerate(self.atoms_list):
-            motifs = []
+            motif_grid = np.empty((nx, ny, nz), dtype=object)
+            occupied = np.zeros((nx, ny, nz), dtype=bool)
             positions = self.coords[iframe]
             for udata in unitcell_data:
                 ma_global = np.array(ma_indices_from_unitcell_data(udata), dtype=int)
@@ -501,16 +523,21 @@ class Trajectory:
                 host.assign(positions[host_global], indices=host_global, atoms=frame[host_global])
 
                 br_cage_global = np.array(udata["br_inds"], dtype=int)
-                motifs.append(
-                    Motif(
-                        [ma, host],
-                        unitcell_data=udata,
-                        br_cage_coords=positions[br_cage_global],
-                        br_cage_indices=br_cage_global,
-                    )
+                motif = Motif(
+                    [ma, host],
+                    unitcell_data=udata,
+                    br_cage_coords=positions[br_cage_global],
+                    br_cage_indices=br_cage_global,
                 )
+                coords = coordinate_by_pb[int(udata["pb_axis"][0])]
+                if occupied[coords]:
+                    raise ValueError(f"duplicate motif grid coordinate {coords}")
+                motif_grid[coords] = motif
+                occupied[coords] = True
 
-            lattices.append(HPLattice(motifs, self.cells[iframe], nx, ny, nz))
+            if not occupied.all():
+                raise ValueError("reference Pb-index grid left motif coordinates unassigned")
+            lattices.append(HPLattice(motif_grid, self.cells[iframe], nx, ny, nz))
 
         return lattices
 
@@ -519,12 +546,16 @@ class Trajectory:
         if reference is None:
             reference = self.atoms_list[0]
         unitcell_data = get_unitcell_indexdata(reference, **kwargs)
-        return self.create_hplattice_from_unitcell_data(unitcell_data, supercell_size=supercell_size)
+        return self.create_hplattice_from_unitcell_data(
+            unitcell_data, supercell_size=supercell_size, reference=reference
+        )
 
     def create_hplattice(self, supercell_size=None, unitcell_data=None, reference=None, **kwargs):
         """Create HPLattice objects using unit-cell data or a reference structure."""
         if unitcell_data is not None:
-            return self.create_hplattice_from_unitcell_data(unitcell_data, supercell_size=supercell_size)
+            return self.create_hplattice_from_unitcell_data(
+                unitcell_data, supercell_size=supercell_size, reference=reference
+            )
         return self.create_hplattice_from_reference(
             reference=reference,
             supercell_size=supercell_size,

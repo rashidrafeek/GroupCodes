@@ -6,6 +6,22 @@ from guesthost.analysis.functions_modules import (
 from pymatgen.util.coord_cython import pbc_shortest_vectors
 from pymatgen.core import Lattice as PmgLattice
 
+
+def reference_pb_coordinates(reference, unitcell_data, cellshape):
+    """Map each unit-cell Pb origin index to a fixed reference grid coordinate."""
+    cellshape = np.asarray(cellshape, dtype=int)
+    scaled = reference.get_scaled_positions(wrap=True)
+    coordinates = {}
+    for udata in unitcell_data:
+        pb_index = int(udata["pb_axis"][0])
+        coords = tuple(np.mod(np.rint(scaled[pb_index] * cellshape).astype(int), cellshape))
+        if pb_index in coordinates or coords in coordinates.values():
+            raise ValueError("reference unit-cell data does not define unique Pb grid coordinates")
+        coordinates[pb_index] = coords
+    if len(coordinates) != int(np.prod(cellshape)):
+        raise ValueError("reference unit-cell data does not fill the requested cell shape")
+    return coordinates
+
 class Motif:
     """Class representing one unit of a repeating collection of fragments"""
     
@@ -30,7 +46,10 @@ class Lattice:
     """Class representing a lattice composed of several motifs with its associated cell"""
 
     def __init__(self, motif_list, cell, nx, ny, nz, pbc=True):
-        motif_grid = np.array(motif_list).reshape(nx, ny, nz)
+        shape = (nx, ny, nz)
+        motif_grid = np.asarray(motif_list, dtype=object)
+        if motif_grid.shape != shape:
+            motif_grid = motif_grid.reshape(shape)
 
         self.motif_grid = motif_grid
         self.cell = cell
@@ -258,8 +277,21 @@ class HPLattice(Lattice):
 
     def ucell_theta_phi(self, ind, dir):
         """Compute theta and phi for the MA fragment in a motif."""
-        ma = self.get_motif(ind).ma
-        return self._theta_phi_from_vector(ma.N - ma.C, self.pb_environment_cell(ind), dir)
+        motif = self.get_motif(ind)
+        ma = motif.ma
+        udata = motif.unitcell_data
+        if udata is None or "pb_axis" not in udata:
+            lcell = self.pb_environment_cell(ind)
+        else:
+            origin_index, axis_indices = udata["pb_axis"]
+            pb_positions = {
+                int(item.host.indices[0]): item.host.B
+                for item in self.motif_grid.flat
+            }
+            origin = pb_positions[int(origin_index)]
+            axes = np.array([pb_positions[int(index)] for index in axis_indices])
+            lcell = pbc_vectors(self.cell, origin, axes).T
+        return self._theta_phi_from_vector(ma.N - ma.C, lcell, dir)
 
     def ucell_theta_phi_dict(self, ind, dir):
         """Compute theta and phi as a mapping."""

@@ -268,6 +268,31 @@ The result dictionary contains `dphi`, `z`, `z_pi`, `z_pi_by2`,
 `z_chain`, `z_chain_pi`, `z_chain_pi_by2`, `S_chain`, `S_chain_pi`, and
 `S_chain_pi_by2`.
 
+
+`polar_phi_grid` uses the packaged MAPbBr3 reference unit-cell data to map a
+Pb atom index to a fixed physical grid coordinate. The assignment is therefore
+not recomputed from distorted instantaneous Pb positions. `create_hplattice` uses
+the same map to construct its motif grid, so neighbouring grid indices follow
+`pb_axis` for every frame.
+
+```python
+phi = gh.polar_phi_grid(lattice, dir_coup=0)
+domain = gh.polar_domain_order_from_phi(phi, dir_coup=0, domain_size=2)
+correlation = gh.polar_domain_autocorrelation(
+    gh.LatticeTrajectory([lattice, lattice]), dir_coup=0, domain_size=2, max_lag=1
+)
+```
+
+| Function | Description |
+| --- | --- |
+| `polar_phi_grid(lattice, dir_coup)` | MA φ grid with fixed reference Pb indexing. |
+| `polar_domain_origins(...)` | Zero-based periodic domain origins. |
+| `polar_domain_order_from_phi(...)` | q=0 and q=π fields from a φ grid. |
+| `polar_domain_order(...)` | Domain order for one lattice. |
+| `polar_domain_order_trajectory(...)` | Time-stacked domain-order fields. |
+| `autocorrelation(...)` | Independently normalized lag autocorrelation along time. |
+| `polar_domain_autocorrelation(...)` | Chain- and origin-averaged domain autocorrelations. |
+
 ## Global Orthorhombic Cell Helpers
 
 Global orthorhombic cell helpers describe the whole lattice cell, not a single

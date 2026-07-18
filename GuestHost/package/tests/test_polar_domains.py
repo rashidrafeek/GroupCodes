@@ -29,6 +29,8 @@ def test_autocorrelation_multiple_series():
     np.testing.assert_allclose(corr[:, 0], 1.0)
     np.testing.assert_allclose(corr[0], 1.0)
     np.testing.assert_allclose(corr[:, 1], [1.0, 0.6, 0.0])
+    legacy = gh.autocorrelation(values, max_lag=2, normalization="legacy_total")
+    np.testing.assert_allclose(legacy[:, 1], [1.0, 0.4, 0.0])
 
 
 def test_domain_order_python_reference_values():

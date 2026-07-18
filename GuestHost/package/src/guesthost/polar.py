@@ -140,10 +140,15 @@ def polar_domain_order_trajectory(trajectory, dir_coup, domain_size, nonoverlapp
     return result
 
 
-def autocorrelation(values, max_lag=None, normalize=True, demean=False):
+def autocorrelation(
+    values, max_lag=None, normalize=True, demean=False, normalization="pair_count"
+):
     """Compute optionally normalized lag autocorrelations along axis zero.
 
     Every remaining index is normalized independently by its zero-lag value.
+    ``normalization="pair_count"`` divides lag ``k`` by its ``N-k`` available
+    pairs. ``normalization="legacy_total"`` divides every lag by ``N`` and
+    reproduces the original Julia ``StatsBase.autocor`` analysis.
     """
     values = np.asarray(values)
     if values.ndim == 0 or values.shape[0] == 0:
@@ -152,25 +157,33 @@ def autocorrelation(values, max_lag=None, normalize=True, demean=False):
         max_lag = values.shape[0] - 1
     if not 0 <= max_lag < values.shape[0]:
         raise ValueError("max_lag must be smaller than the time-series length")
+    if normalization not in ("pair_count", "legacy_total"):
+        raise ValueError("normalization must be 'pair_count' or 'legacy_total'")
     work = values - values.mean(axis=0) if demean else values
     corr = np.stack([
         np.mean(np.conjugate(work[: values.shape[0] - lag]) * work[lag:], axis=0)
         for lag in range(max_lag + 1)
     ])
+    if normalization == "legacy_total":
+        scale = (values.shape[0] - np.arange(max_lag + 1)) / values.shape[0]
+        corr *= scale[(slice(None),) + (None,) * (values.ndim - 1)]
     if normalize:
         corr = corr / corr[0]
     return np.real_if_close(corr)
 
 
 def polar_domain_autocorrelation(
-    trajectory, dir_coup, domain_size, max_lag=None, nonoverlapping=False, demean=False
+    trajectory, dir_coup, domain_size, max_lag=None, nonoverlapping=False,
+    demean=False, normalization="pair_count"
 ):
-    """Average normalized domain-order autocorrelations over chains and origins."""
+    """Average domain-order ACFs using ``pair_count`` or ``legacy_total`` normalization."""
     order = polar_domain_order_trajectory(
         trajectory, dir_coup, domain_size, nonoverlapping
     )
     result = {}
     for key in ("xi_q0", "xi_qpi", "S_q0", "S_qpi"):
-        per_domain = autocorrelation(order[key], max_lag=max_lag, demean=demean)
+        per_domain = autocorrelation(
+            order[key], max_lag=max_lag, demean=demean, normalization=normalization
+        )
         result[key] = per_domain.mean(axis=(1, 2))
     return result

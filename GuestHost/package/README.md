@@ -279,7 +279,8 @@ the same map to construct its motif grid, so neighbouring grid indices follow
 phi = gh.polar_phi_grid(lattice, dir_coup=0)
 domain = gh.polar_domain_order_from_phi(phi, dir_coup=0, domain_size=2)
 correlation = gh.polar_domain_autocorrelation(
-    gh.LatticeTrajectory([lattice, lattice]), dir_coup=0, domain_size=2, max_lag=1
+    gh.LatticeTrajectory([lattice, lattice]), dir_coup=0, domain_size=2,
+    max_lag=1, normalization="legacy_total",
 )
 ```
 
@@ -290,8 +291,8 @@ correlation = gh.polar_domain_autocorrelation(
 | `polar_domain_order_from_phi(...)` | q=0 and q=π fields from a φ grid. |
 | `polar_domain_order(...)` | Domain order for one lattice. |
 | `polar_domain_order_trajectory(...)` | Time-stacked domain-order fields. |
-| `autocorrelation(...)` | Independently normalized lag autocorrelation along time. |
-| `polar_domain_autocorrelation(...)` | Chain- and origin-averaged domain autocorrelations. |
+| `autocorrelation(...)` | Lag ACF with `pair_count` (`N-k`, default) or `legacy_total` (`N`) normalization. |
+| `polar_domain_autocorrelation(...)` | Chain- and origin-averaged ACFs with either normalization. |
 
 ## Global Orthorhombic Cell Helpers
 

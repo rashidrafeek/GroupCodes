@@ -430,3 +430,13 @@ python -m pytest tests
 
 The tests include reference-data checks for lattice construction, orientations,
 and torsions.
+
+
+## Persistent theta/phi trajectories
+
+`gh.theta_phi_grid(lattice, direction, cellshape=None)` returns canonical
+fixed-Pb-grid angular fields. `gh.save_theta_phi` writes frame-first
+`(frame, x, y, z)` theta/phi arrays, time in ps, source dump steps, and scalar
+provenance attributes to HDF5; `gh.load_theta_phi` restores that data. This
+supports extracting trajectory angles once and reusing them in downstream
+analyses.

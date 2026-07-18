@@ -49,3 +49,20 @@ def test_domain_order_python_reference_values():
         [[0.679891185654455, -0.30816678978503],
          [0.333333333333333, -0.301872821034283]],
     )
+
+
+
+def test_theta_phi_hdf5_round_trip(tmp_path):
+    theta = np.arange(16, dtype=float).reshape(2, 2, 2, 2)
+    phi = theta - 90.0
+    path = tmp_path / "theta_phi.h5"
+    gh.save_theta_phi(
+        path, theta, phi, [0.0, 1.0], [100, 110],
+        metadata={"pressure_gpa": 1.1, "direction_python": 2},
+    )
+    loaded = gh.load_theta_phi(path)
+    np.testing.assert_array_equal(loaded["theta"], theta)
+    np.testing.assert_array_equal(loaded["phi"], phi)
+    np.testing.assert_array_equal(loaded["times_ps"], [0.0, 1.0])
+    np.testing.assert_array_equal(loaded["source_steps"], [100, 110])
+    assert loaded["metadata"]["direction_python"] == 2

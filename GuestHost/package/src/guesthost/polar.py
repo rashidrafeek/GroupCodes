@@ -71,6 +71,40 @@ def polar_phi_grid(lattice, dir_coup, cellshape=None):
     return phi
 
 
+def theta_phi_grid(lattice, dir_coup, cellshape=None):
+    """Return MA theta and phi on the canonical fixed Pb-index grid.
+
+    The returned arrays have shape ``cellshape``. Their coordinates are taken
+    from the packaged reference Pb map, rather than from each instantaneous
+    frame, so they can be stored and compared across a trajectory.
+    """
+    if cellshape is None:
+        cellshape = (lattice.nx, lattice.ny, lattice.nz)
+    from guesthost.constants import (
+        MPB_SYS_4x4x4, MPB_SYS_8x8x8,
+        UNITCELL_INDEXDATA_MPB_4x4x4, UNITCELL_INDEXDATA_MPB_8x8x8,
+    )
+    references = {
+        64: (MPB_SYS_4x4x4, UNITCELL_INDEXDATA_MPB_4x4x4),
+        512: (MPB_SYS_8x8x8, UNITCELL_INDEXDATA_MPB_8x8x8),
+    }
+    theta = np.empty(cellshape, dtype=float)
+    phi = np.empty(cellshape, dtype=float)
+    reference = references.get(int(np.prod(cellshape)))
+    coordinate_by_pb = (
+        reference_pb_coordinates(reference[0], reference[1], cellshape)
+        if reference is not None else {}
+    )
+    for ind in np.ndindex(cellshape):
+        motif = lattice.get_motif(ind)
+        pb_index = int(motif.unitcell_data["pb_axis"][0])
+        coords = coordinate_by_pb.get(pb_index, ind)
+        theta_value, phi_value = lattice.ucell_theta_phi(ind, dir=dir_coup)
+        theta[coords] = theta_value
+        phi[coords] = phi_value
+    return {"theta": theta, "phi": phi}
+
+
 def polar_order_parameter(lattice, dir_coup, cellshape=None):
     if cellshape is None:
         cellshape = (lattice.nx, lattice.ny, lattice.nz)

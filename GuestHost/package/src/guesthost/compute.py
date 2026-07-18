@@ -156,3 +156,47 @@ def load_results(filename):
     """Load HDF5 results written by save_results."""
     with h5py.File(filename, "r") as handle:
         return {key: _read_node(handle[key]) for key in handle.keys()}
+
+
+
+def save_theta_phi(filename, theta, phi, times_ps, source_steps, metadata=None):
+    """Write frame-first fixed-grid theta/phi arrays to HDF5.
+
+    ``theta`` and ``phi`` must have shape ``(frame, x, y, z)``.  The selected
+    frame time in ps and original dump timestep are stored alongside the grids.
+    Scalar ``metadata`` entries are written as file attributes.
+    """
+    theta = np.asarray(theta)
+    phi = np.asarray(phi)
+    times_ps = np.asarray(times_ps)
+    source_steps = np.asarray(source_steps)
+    if theta.shape != phi.shape or theta.ndim != 4:
+        raise ValueError("theta and phi must have identical (frame, x, y, z) shapes")
+    if len(times_ps) != theta.shape[0] or len(source_steps) != theta.shape[0]:
+        raise ValueError("time and source-step arrays must match the frame count")
+    with h5py.File(filename, "w") as handle:
+        handle.create_dataset("theta", data=theta)
+        handle.create_dataset("phi", data=phi)
+        handle.create_dataset("time_ps", data=times_ps)
+        handle.create_dataset("source_step", data=source_steps)
+        handle.attrs["format"] = "guesthost_theta_phi_v1"
+        handle.attrs["grid_order"] = "frame,x,y,z"
+        for key, value in (metadata or {}).items():
+            handle.attrs[str(key)] = value
+    return filename
+
+
+def load_theta_phi(filename):
+    """Load a theta/phi HDF5 file written by :func:`save_theta_phi`."""
+    with h5py.File(filename, "r") as handle:
+        required = ("theta", "phi", "time_ps", "source_step")
+        missing = [key for key in required if key not in handle]
+        if missing:
+            raise ValueError(f"not a guesthost theta/phi HDF5 file; missing {missing}")
+        return {
+            "theta": handle["theta"][:],
+            "phi": handle["phi"][:],
+            "times_ps": handle["time_ps"][:],
+            "source_steps": handle["source_step"][:],
+            "metadata": dict(handle.attrs.items()),
+        }

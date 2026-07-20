@@ -61,12 +61,14 @@ def test_reference_unitcell_data_is_loaded_from_json():
         "br_axis",
         "br_axis_neg",
     }
+    expected_keys_with_ortho = expected_keys | {"pb_ortho_axes", "pb_ortho_axes_small"}
     assert isinstance(gh.UNITCELL_INDEXDATA_MPB_4x4x4[0]["pb_axis"], tuple)
     assert isinstance(gh.UNITCELL_INDEXDATA_MPB_8x8x8[0]["pb_axis"], tuple)
     assert set(gh.UNITCELL_INDEXDATA_MPB_4x4x4[0]) == expected_keys
-    assert set(gh.UNITCELL_INDEXDATA_MPB_8x8x8[0]) == expected_keys
-    assert gh.UNITCELL_INDEXDATA_MPB_8x8x8[-1]["c_ind"] == 5759
-    assert gh.UNITCELL_INDEXDATA_MPB_8x8x8[-1]["n_ind"] == 5695
+    assert set(gh.UNITCELL_INDEXDATA_MPB_8x8x8[0]) == expected_keys_with_ortho
+    positions = gh.MPB_SYS_8x8x8.get_positions()
+    pb_grid = [tuple(np.floor(positions[u["pb_axis"][0]] / 5.5).astype(int)) for u in gh.UNITCELL_INDEXDATA_MPB_8x8x8]
+    assert pb_grid == sorted(pb_grid)
 
 
 def test_unitcell_detector_matches_cached_json_4x4x4():
@@ -75,6 +77,15 @@ def test_unitcell_detector_matches_cached_json_4x4x4():
     assert computed == expected
     assert gh.UNITCELL_INDEXDATA_MPB_4x4x4 == expected
 
+
+
+def test_unitcell_detector_coordinate_order_and_compatibility_order():
+    coordinate_order = gh.get_unitcell_indexdata(gh.MPB_SYS_4x4x4)
+    carbon_order = gh.get_unitcell_indexdata(gh.MPB_SYS_4x4x4, sortby="carbon_index")
+    positions = gh.MPB_SYS_4x4x4.get_positions()
+    pb_grid = [tuple(np.floor(positions[u["pb_axis"][0]] / 5.5).astype(int)) for u in coordinate_order]
+    assert pb_grid == sorted(pb_grid)
+    assert [u["c_ind"] for u in carbon_order] == sorted(u["c_ind"] for u in carbon_order)
 
 def test_unitcell_detector_can_include_ortho_axes():
     computed = gh.get_unitcell_indexdata(gh.MPB_SYS_4x4x4, ortho_axes=True)

@@ -208,8 +208,15 @@ def get_unitcell_indexdata(
     exclude_br_axis=False,
     pb_orig_shift_val=5.926,
     ortho_axes=False,
+    sortby="pb_origin",
+    gridsize=5.5,
 ):
-    """Extract MAPbBr3 unit-cell index data from an ASE Atoms reference."""
+    """Extract MAPbBr3 unit-cell data sorted by Pb-origin grid coordinate.
+
+    Set ``sortby="carbon_index"`` only when compatibility with historical
+    atom-index ordering is required. ``gridsize`` is the pseudo-cubic spacing
+    used to bin Pb-origin coordinates (default: 5.5 Å).
+    """
     struct = Structure(
         lattice=system.cell,
         species=system.get_chemical_symbols(),
@@ -318,6 +325,14 @@ def get_unitcell_indexdata(
 
         unitcell_indexdata.append(unitcell_data)
 
+    if sortby == "pb_origin":
+        unitcell_indexdata.sort(
+            key=lambda u: tuple(np.floor(struct[u["pb_axis"][0]].coords / gridsize).astype(int))
+        )
+    elif sortby == "carbon_index":
+        unitcell_indexdata.sort(key=lambda u: u["c_ind"])
+    else:
+        raise ValueError("sortby must be 'pb_origin' or 'carbon_index'")
     return unitcell_indexdata
 
 

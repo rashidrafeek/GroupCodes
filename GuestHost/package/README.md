@@ -440,3 +440,7 @@ fixed-Pb-grid angular fields. `gh.save_theta_phi` writes frame-first
 provenance attributes to HDF5; `gh.load_theta_phi` restores that data. This
 supports extracting trajectory angles once and reusing them in downstream
 analyses.
+
+### Unit-cell ordering
+
+Detected unit-cell metadata is ordered by the Pb-origin pseudo-cubic grid coordinate, not by atom index. This is required by analyses that reshape unit-cell vectors into spatial grids. Pass `sortby="carbon_index"` for historical compatibility.

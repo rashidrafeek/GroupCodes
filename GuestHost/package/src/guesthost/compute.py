@@ -200,3 +200,18 @@ def load_theta_phi(filename):
             "source_steps": handle["source_step"][:],
             "metadata": dict(handle.attrs.items()),
         }
+
+
+def load_phi(filename):
+    """Load only phi and provenance from a theta/phi HDF5 file."""
+    with h5py.File(filename, "r") as handle:
+        required = ("phi", "time_ps", "source_step")
+        missing = [key for key in required if key not in handle]
+        if missing:
+            raise ValueError(f"not a guesthost theta/phi HDF5 file; missing {missing}")
+        return {
+            "phi": handle["phi"][:],
+            "times_ps": handle["time_ps"][:],
+            "source_steps": handle["source_step"][:],
+            "metadata": dict(handle.attrs.items()),
+        }

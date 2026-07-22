@@ -70,6 +70,23 @@ class TestUnitcellFunctions(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(theta)))
         self.assertTrue(np.all(np.isfinite(phi)))
 
+    def test_convert_theta_phi_direction(self):
+        theta, phi = 37.0, -124.0
+        converted = self.lattice.convert_theta_phi_direction(
+            theta, phi, from_dir=2, to_dir=0
+        )
+        np.testing.assert_allclose(
+            self.lattice.ucell_xyz(*converted, theta_dir=0),
+            self.lattice.ucell_xyz(theta, phi, theta_dir=2),
+        )
+
+        theta_array = np.array([[37.0, 80.0], [120.0, 165.0]])
+        phi_array = np.array([[-124.0, 12.0], [91.0, 179.0]])
+        converted_arrays = self.lattice.convert_theta_phi_direction(
+            theta_array, phi_array, from_dir=2, to_dir=0
+        )
+        assert converted_arrays[0].shape == theta_array.shape
+
     def test_U_r_and_ucell_ω(self):
         """Test rotation matrix and ω computation"""
         eta = np.array([0.7, 0.3])

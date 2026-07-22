@@ -35,6 +35,21 @@ from guesthost.polar import (
     polar_domain_origins,
     polar_order_parameter,
 )
+from guesthost.polar_analysis import (
+    bond_domain_run_lengths,
+    chain_structure_factor,
+    connected_correlation,
+    periodic_label_runs,
+    polar_bond_labels,
+    polar_domain_series,
+    polar_domain_states,
+    relaxation_metrics,
+    second_moment_correlation_length,
+    spatial_correlation,
+    state_dwell_runs,
+    state_survival,
+    survival_metrics,
+)
 from guesthost.global_cell import (
     get_global_index_data,
     global_cell_angles_OR,
@@ -51,6 +66,7 @@ from guesthost.compute import (
     load_results,
     save_results,
     load_theta_phi,
+    load_phi,
     save_theta_phi,
 )
 from guesthost.lammps import (

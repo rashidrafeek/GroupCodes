@@ -142,6 +142,7 @@ eta_lat = lattice.ucell_eta_lat(ind, dir_coup=0)
 | `ucell_theta_phi_dict(ind, dir)` | MA orientation angles as `{"theta": ..., "phi": ...}`. |
 | `ucell_theta_phi_withcutoff(ind, dir, ratio_cut=0.05)` | MA orientation with `phi` set to zero when the in-plane projection is small. |
 | `ucell_xyz(theta_deg, phi_deg, theta_dir=2)` | Convert orientation angles to Cartesian-like components. |
+| `convert_theta_phi_direction(theta, phi, from_dir=2, to_dir=0)` | Re-express orientation angles using another zero-based polar-axis convention. |
 | `ucell_eta_MA(ind, dir, **kwargs)` | Two-component MA order parameter. |
 | `ucell_eta_MA_from_angles(theta, phi, **kwargs)` | Two-component MA order parameter from angles. |
 | `ucell_eta_3d_MA(ind, dir=2, **kwargs)` | Three-component MA order parameter. |
@@ -437,9 +438,43 @@ and torsions.
 `gh.theta_phi_grid(lattice, direction, cellshape=None)` returns canonical
 fixed-Pb-grid angular fields. `gh.save_theta_phi` writes frame-first
 `(frame, x, y, z)` theta/phi arrays, time in ps, source dump steps, and scalar
-provenance attributes to HDF5; `gh.load_theta_phi` restores that data. This
-supports extracting trajectory angles once and reusing them in downstream
-analyses.
+provenance attributes to HDF5; `gh.load_theta_phi` restores that data.
+`gh.load_phi` reads only the azimuthal grid and associated time, step, and
+metadata arrays when `theta` is unnecessary. This supports extracting trajectory
+angles once and reusing them in downstream analyses.
+
+## Polar-domain temporal and spatial analysis
+
+The package provides:
+
+- `polar_domain_series`, `connected_correlation`, and `relaxation_metrics` for
+  continuous size-dependent relaxation;
+- `polar_domain_states`, `state_dwell_runs`, `state_survival`, and
+  `survival_metrics` for discrete polar/antipolar lifetimes, correctly separated
+  left/right censoring, Kaplan--Meier curves, and median/RMST summaries;
+- `spatial_correlation` for signed orientation, complex-bond, and bond-polarity
+  correlations, including connected and staggered variants;
+- `chain_structure_factor`, `second_moment_correlation_length`,
+  `polar_bond_labels`, and `bond_domain_run_lengths` for ordering wavevectors,
+  finite-box length diagnostics, and real-space run lengths.
+
+The variance-weighted connected temporal estimator is the default; equal-series
+aggregation is also available. Interpret second-moment lengths together with
+their resolution and peak-wavevector diagnostics, signed correlations, and
+structure factors.
+
+```python
+import guesthost as gh
+
+phi, times, steps, attrs = gh.load_phi("theta_phi.h5")
+series = gh.polar_domain_series(phi, direction=1, domain_size=4)
+acf = gh.connected_correlation(series, max_lag=100, block_length=20)
+metrics = gh.relaxation_metrics(acf["correlation"], times[:101] - times[0])
+
+corr = gh.spatial_correlation(phi, direction=1, field="orientation", connected=True)
+sf = gh.chain_structure_factor(phi, direction=1, field="orientation", connected=True)
+xi = gh.second_moment_correlation_length(sf["structure_factor"])
+```
 
 ### Unit-cell ordering
 

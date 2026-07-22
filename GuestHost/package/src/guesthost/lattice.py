@@ -333,6 +333,38 @@ class HPLattice(Lattice):
         ]
         return [vec[i] for i in order_map[theta_dir]]
 
+    @staticmethod
+    def convert_theta_phi_direction(theta, phi, from_dir=2, to_dir=0):
+        """Re-express MA angles using another zero-based polar-axis convention.
+
+        Scalar inputs return a ``(theta, phi)`` tuple. NumPy-compatible arrays
+        return two arrays with the broadcast input shape. The physical
+        orientation is unchanged.
+        """
+        if from_dir not in range(3) or to_dir not in range(3):
+            raise ValueError("directions are zero-based and must be 0, 1, or 2")
+        theta_array, phi_array = np.broadcast_arrays(
+            np.asarray(theta, dtype=float), np.asarray(phi, dtype=float)
+        )
+        polar = np.deg2rad(theta_array)
+        azimuth = np.deg2rad(phi_array)
+        spherical = np.stack(
+            (
+                np.sin(polar) * np.cos(azimuth),
+                np.sin(polar) * np.sin(azimuth),
+                np.cos(polar),
+            ),
+            axis=-1,
+        )
+        source_order = ([2, 0, 1], [1, 2, 0], [0, 1, 2])[from_dir]
+        vector = spherical[..., source_order]
+        i, j, k = ((0, 1, 2), (1, 2, 0), (2, 0, 1))[to_dir]
+        theta_out = np.rad2deg(np.arccos(np.clip(vector[..., i], -1.0, 1.0)))
+        phi_out = np.rad2deg(np.arctan2(vector[..., k], vector[..., j]))
+        if theta_out.ndim == 0:
+            return float(theta_out), float(phi_out)
+        return theta_out, phi_out
+
     def all_ucell_theta_phi(self, dir):
         """Compute MA theta/phi for every motif in the lattice."""
         theta_vals = np.zeros((self.nx, self.ny, self.nz))
